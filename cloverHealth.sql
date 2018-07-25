@@ -16,6 +16,31 @@ FROM (SELECT DISTINCT c.member_id,
       c.gender
       FROM cloverhealth.hw_phx c) t1) t2
 
+/* Percentage of males and females in the dataset: a lot of nested queries were generated but I feel like there should be a shorter way to do this... */
+
+SELECT t4.total_males,
+       t4.total_females,
+       t4.total_people,
+       (t4.total_males/t4.total_people * 100) AS percentage_males,
+       (t4.total_females/t4.total_people * 100) AS percentage_females
+FROM
+(SELECT t3.total_males,
+       t3.total_females,
+      SUM(total_males + total_females) AS total_people
+FROM
+(SELECT SUM(t2.males) AS total_males,
+       SUM(t2.females) AS total_females
+FROM (SELECT t1.gender,
+       CASE WHEN t1.gender = 'Male'
+       THEN 1 ELSE 0 END AS males,
+       CASE WHEN t1.gender = 'Female'
+       THEN 1 ELSE 0 END AS females
+FROM (SELECT DISTINCT c.member_id,
+      c.gender
+      FROM cloverhealth.hw_phx c) t1) t2) t3
+
+GROUP BY 1,2) t4
+
 /* Which doctor id created the most claims */
 
 SELECT prescribing_doctor_id as doctor_id,
@@ -81,6 +106,16 @@ SELECT
 GROUP BY 1
 ORDER BY 2 DESC
 
+/* Average number of claims per physician */
+
+SELECT AVG(t1.claims)
+FROM
+(SELECT prescribing_doctor_id as doctor_id,
+       COUNT (DISTINCT claim_number) as claims
+  FROM cloverhealth.hw_phx
+GROUP BY 1
+ORDER BY 2 DESC) t1
+
 /* Who has the highest health risk */
 
 SELECT member_id,
@@ -90,23 +125,37 @@ GROUP BY 1, 2
 ORDER BY 2 DESC
 LIMIT 1
 
-/* Highest health risk score among gender */
+/* Highest health risk score in terms of age */
 
 SELECT
-       DISTINCT (c.member_id),
        c.gender,
        c.age,
        c.member_health_risk_assesment_score AS max_health_risk
 FROM cloverhealth.hw_phx c
 INNER JOIN
 ( SELECT
-       DISTINCT (member_id),
        gender,
        MAX(age) AS max_age,
        MAX(member_health_risk_assesment_score) AS max_health_score
   FROM cloverhealth.hw_phx
-GROUP BY 1,2) t1
+GROUP BY 1) t1
 
-ON c.member_id = t1.member_id AND c.gender = t1.gender AND c.age = t1.max_age
+ON c.gender = t1.gender AND c.age = t1.max_age
 
-ORDER BY 4 DESC
+ORDER BY 3 DESC
+
+/* Which doctor wrote the most number of claims for a patient */
+
+SELECT prescribing_doctor_id,
+       member_id,
+      MAX(claims)
+FROM
+(SELECT prescribing_doctor_id,
+       member_id,
+       COUNT(claim_number) claims
+  FROM cloverhealth.hw_phx
+GROUP BY 1,2
+ORDER BY 1) t1
+
+GROUP BY 1,2
+ORDER BY 3 DESC
